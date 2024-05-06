@@ -3,17 +3,16 @@ import tiktoken
 from loguru import logger
 
 from langchain.chains import ConversationalRetrievalChain
-from langchain.chat_models import ChatOpenAI
+from langchain_openai import ChatOpenAI
 
 from langchain.document_loaders import PyPDFLoader
 from langchain.document_loaders import Docx2txtLoader
 from langchain.document_loaders import UnstructuredPowerPointLoader
 
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.embeddings import HuggingFaceEmbeddings
 
 from langchain.memory import ConversationBufferMemory
-from langchain.vectorstores import FAISS
+#from langchain.vectorstores import FAISS
 
 # from streamlit_chat import message
 from langchain.callbacks import get_openai_callback
@@ -29,8 +28,21 @@ GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
 
 
 from langchain_community.document_loaders import TextLoader
+from langchain_text_splitters import CharacterTextSplitter
+import tiktoken
+from langchain_chroma import Chroma
+from langchain_openai import OpenAIEmbeddings
+
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import RunnablePassthrough
+from langchain_core.output_parsers import StrOutputParser
+from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 
 
+openai = ChatOpenAI(model_name="gpt-3.5-turbo-0125",
+                    streaming=True, callbacks=[StreamingStdOutCallbackHandler()],
+                    temperature = 0,
+                    openai_api_key=OPENAI_API_KEY)
 
 def main():
     st.set_page_config(
@@ -78,15 +90,18 @@ def main():
     text_splitter = CharacterTextSplitter(chunk_size=500, chunk_overlap=100, length_function = tiktoken_len)
     documents = text_splitter.split_documents(test_document)
 
-
     #add to vectorstore
-    #embedding_function = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY, model="text-embedding-3-small")
+    embedding_function = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY, model="text-embedding-3-small")
+    db = Chroma.from_documents(documents, embedding_function)
+    #selected_documents = db.similarity_search(query=user_input, k=5)
+    #retriever = db.as_retriever(search_kwargs={"k": 3})
     
-    files_text = get_text(uploaded_files)
-    text_chunks = get_text_chunks(files_text)
-    vetorestore = get_vectorstore(text_chunks)
+    # files_text = get_text(uploaded_files)
+    # text_chunks = get_text_chunks(files_text)
+    # vetorestore = get_vectorstore(text_chunks)
     
-    st.session_state.conversation = get_conversation_chain(vetorestore, OPENAI_API_KEY) 
+    st.session_state.conversation = get_conversation_chain(db, OPENAI_API_KEY) 
+    #st.session_state.conversation = get_consult_chain(db, OPENAI_API_KEY)
 
     st.session_state.processComplete = True
 
@@ -108,20 +123,24 @@ def main():
             st.markdown(query)
 
         with st.chat_message("assistant"):
-            chain = st.session_state.conversation
+            #chain = st.session_state.conversation
+            docs = get_docs(db, query)
+            print("\n\ndocs : ", docs)
+            chain = create_consult_chain(query, docs)
 
             with st.spinner("Thinking..."):
-                result = chain({"question": query})
-                with get_openai_callback() as cb:
-                    st.session_state.chat_history = result['chat_history']
-                response = result['answer']
-                source_documents = result['source_documents']
+                # result = chain({"question": query})
+                # with get_openai_callback() as cb:
+                #     st.session_state.chat_history = result['chat_history']
+                # response = result['answer']
+                # source_documents = result['source_documents']
+                response = chain.invoke({"question": query, "personality": docs})
 
                 st.markdown(response)
-                with st.expander("참고 문서 확인"):
-                    st.markdown(source_documents[0].metadata['source'], help = source_documents[0].page_content)
-                    st.markdown(source_documents[1].metadata['source'], help = source_documents[1].page_content)
-                    st.markdown(source_documents[2].metadata['source'], help = source_documents[2].page_content)
+                # with st.expander("참고 문서 확인"):
+                #     st.markdown(source_documents[0].metadata['source'], help = source_documents[0].page_content)
+                #     st.markdown(source_documents[1].metadata['source'], help = source_documents[1].page_content)
+                #     st.markdown(source_documents[2].metadata['source'], help = source_documents[2].page_content)
                     
 
 
@@ -167,12 +186,12 @@ def get_text_chunks(text):
 
 
 def get_vectorstore(text_chunks):
-    embeddings = HuggingFaceEmbeddings(
-                                        model_name="jhgan/ko-sroberta-multitask",
-                                        model_kwargs={'device': 'cpu'},
-                                        encode_kwargs={'normalize_embeddings': True}
-                                        )  
-    vectordb = FAISS.from_documents(text_chunks, embeddings)
+    # embeddings = HuggingFaceEmbeddings(
+    #                                     model_name="jhgan/ko-sroberta-multitask",
+    #                                     model_kwargs={'device': 'cpu'},
+    #                                     encode_kwargs={'normalize_embeddings': True}
+    #                                     )  
+    #vectordb = FAISS.from_documents(text_chunks, embeddings)
     return vectordb
 
 def get_conversation_chain(vetorestore,openai_api_key):
@@ -180,7 +199,7 @@ def get_conversation_chain(vetorestore,openai_api_key):
     conversation_chain = ConversationalRetrievalChain.from_llm(
             llm=llm, 
             chain_type="stuff", 
-            retriever=vetorestore.as_retriever(search_type = 'mmr', vervose = True), 
+            retriever=vetorestore.as_retriever(search_type = 'mmr', vervose = True, search_kwargs={"k": 3}), 
             memory=ConversationBufferMemory(memory_key='chat_history', return_messages=True, output_key='answer'),
             get_chat_history=lambda h: h,
             return_source_documents=True,
@@ -188,6 +207,46 @@ def get_conversation_chain(vetorestore,openai_api_key):
         )
 
     return conversation_chain
+
+def get_docs(vectorstore, user_input):
+    # openai = ChatOpenAI(model_name="gpt-3.5-turbo-0125",
+    #                 streaming=True, callbacks=[StreamingStdOutCallbackHandler()],
+    #                 temperature = 0,
+    #                 openai_api_key=OPENAI_API_KEY)
+    
+    print("\n\n", user_input)
+    #retriever=vectorstore.as_retriever(search_type = 'mmr', vervose = True, search_kwargs={"k": 3}), 
+    #docs = retriever.invoke(user_input)
+
+    docs = vectorstore.similarity_search(user_input)
+
+    return docs
+
+
+
+def create_consult_chain(user_input, docs):
+    template = """
+
+    Analysis and advice: Please provide insights and advice on the personality of {personality}.
+    Describe their tendencies, character, and traits. Additionally, analyze and offer advice on what they should be mindful of, what they need, and what they might be lacking. 
+    Offer practical advice that could help this individual live a better life.
+    Always answer in  Korean.
+
+    Answer the question based on the personality:
+    Question: {question}
+
+    """
+
+    system_message_prompt = ChatPromptTemplate.from_template(template)
+
+    consult_chain = (
+        {"question": RunnablePassthrough(), "personality": RunnablePassthrough()}
+        | system_message_prompt
+        | openai
+        | StrOutputParser()
+    )
+
+    return consult_chain
 
 
 
