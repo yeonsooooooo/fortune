@@ -19,6 +19,19 @@ from langchain.vectorstores import FAISS
 from langchain.callbacks import get_openai_callback
 from langchain.memory import StreamlitChatMessageHistory
 
+#new added
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
+
+
+from langchain_community.document_loaders import TextLoader
+
+
+
 def main():
     st.set_page_config(
     page_title="DirChat",
@@ -35,21 +48,47 @@ def main():
     if "processComplete" not in st.session_state:
         st.session_state.processComplete = None
 
-    with st.sidebar:
-        uploaded_files =  st.file_uploader("Upload your file",type=['pdf','docx'],accept_multiple_files=True)
-        openai_api_key = st.text_input("OpenAI API Key", key="chatbot_api_key", type="password")
-        process = st.button("Process")
-    if process:
-        if not openai_api_key:
-            st.info("Please add your OpenAI API key to continue.")
-            st.stop()
-        files_text = get_text(uploaded_files)
-        text_chunks = get_text_chunks(files_text)
-        vetorestore = get_vectorstore(text_chunks)
+    # with st.sidebar:
+    #     uploaded_files =  st.file_uploader("Upload your file",type=['pdf','docx'],accept_multiple_files=True)
+    #     openai_api_key = st.text_input("OpenAI API Key", key="chatbot_api_key", type="password")
+    #     process = st.button("Process")
+    # if process:
+    #     if not openai_api_key:
+    #         st.info("Please add your OpenAI API key to continue.")
+    #         st.stop()
+    #     files_text = get_text(uploaded_files)
+    #     text_chunks = get_text_chunks(files_text)
+    #     vetorestore = get_vectorstore(text_chunks)
      
-        st.session_state.conversation = get_conversation_chain(vetorestore,openai_api_key) 
+    #     st.session_state.conversation = get_conversation_chain(vetorestore,openai_api_key) 
 
-        st.session_state.processComplete = True
+    #     st.session_state.processComplete = True
+
+    loader_test = TextLoader('test.txt', 'utf-8')
+
+    test_document = loader_test.load()
+
+    tokenizer = tiktoken.get_encoding("cl100k_base")
+    def tiktoken_len(text):
+        tokens = tokenizer.encode(text)
+        return len(tokens)
+
+
+    #split
+    text_splitter = CharacterTextSplitter(chunk_size=500, chunk_overlap=100, length_function = tiktoken_len)
+    documents = text_splitter.split_documents(test_document)
+
+
+    #add to vectorstore
+    #embedding_function = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY, model="text-embedding-3-small")
+    
+    files_text = get_text(uploaded_files)
+    text_chunks = get_text_chunks(files_text)
+    vetorestore = get_vectorstore(text_chunks)
+    
+    st.session_state.conversation = get_conversation_chain(vetorestore, OPENAI_API_KEY) 
+
+    st.session_state.processComplete = True
 
     if 'messages' not in st.session_state:
         st.session_state['messages'] = [{"role": "assistant", 
