@@ -32,7 +32,8 @@ GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
 from langchain_community.document_loaders import TextLoader
 from langchain_text_splitters import CharacterTextSplitter
 import tiktoken
-from langchain_chroma import Chroma
+#from langchain_chroma import Chroma
+from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings
 
 from langchain_core.prompts import ChatPromptTemplate
@@ -97,7 +98,7 @@ def main():
 
     #add to vectorstore
     embedding_function = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY, model="text-embedding-3-small")
-    db = Chroma.from_documents(documents, embedding_function)
+    db = FAISS.from_documents(documents, embedding_function)
     #selected_documents = db.similarity_search(query=user_input, k=5)
     #retriever = db.as_retriever(search_kwargs={"k": 3})
     
@@ -105,7 +106,7 @@ def main():
     # text_chunks = get_text_chunks(files_text)
     # vetorestore = get_vectorstore(text_chunks)
     
-    st.session_state.conversation = get_conversation_chain(db, OPENAI_API_KEY) 
+    #st.session_state.conversation = get_conversation_chain(db, OPENAI_API_KEY) 
     #st.session_state.conversation = get_consult_chain(db, OPENAI_API_KEY)
 
     st.session_state.processComplete = True
