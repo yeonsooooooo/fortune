@@ -1,52 +1,81 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
-from sqlalchemy.orm import relationship
-from sqlalchemy.orm import declarative_base
+# SQLAlchemy를 사용해 데이터베이스 모델 정의
+
+from sqlalchemy import Column, Integer, String, ForeignKey
+from sqlalchemy.orm import declarative_base, relationship
+from sqlalchemy.sql.sqltypes import Enum, Date, Time, JSON
+
+from app.commons.genderenum import GenderEnum
+from app.schema.request import CreateMemberRequest, CreateMemberSajuInfoRequest
 
 Base = declarative_base()
 
 
-class User(Base):
-    __tablename__ = "users"
+class Member(Base):
+    __tablename__ = "members"
 
-    id = Column(String, primary_key=True, index=True)  # 회원 아이디
-    gender = Column(String)  # 성별
-    birth_date = Column(DateTime)  # 태어난 날짜 연월일
-    birth_time = Column(DateTime, Nullable=True)  # 태어난 시간
-    user_saju_id = Column(Integer, ForeignKey('user_saju.id'))  # 사주 정보
+    id = Column(Integer, primary_key=True, autoincrement=True)  # 회원 아이디
+    user_id = Column(String(20))  # 성별
+    email = Column(String(30))
+    password = Column(String(255))
+    name = Column(String(20))
+    gender = Column(Enum(GenderEnum))
+    birth_date = Column(Date)  # 태어난 날짜 연월일
+    birth_time = Column(Time)  # 태어난 시간
 
-    user_saju = relationship("User_Saju", back_populates="user")
-#edsfsdfsf
+    saju_info = relationship("MemberSajuInfo", back_populates="member")
 
-class User_Saju(Base):
-    __tablename__ = "user_saju"
+    def __repr__(self):
+        return f"Member(id={self.id})"
 
-    id = Column(Integer, primary_key=True, index=True)
-    time_info1 = Column(String)  # 시주 1행
-    time_relationInfo1 = Column(String)  # 시주 육친 1행
-    time_info2 = Column(String)  # 시주 2행
-    time_relationInfo2 = Column(String)  # 시주 육친 2행
-    day_info1 = Column(String)  # 일주 1행
-    day_relationInfo1 = Column(String)  # 일주 육친 1행
-    day_info2 = Column(String)  # 일주 2행
-    day_relationInfo2 = Column(String)  # 일주 육친 2행
-    month_info1 = Column(String)  # 월주 1행
-    month_relationInfo1 = Column(String)  # 월주 육친 1행
-    month_info2 = Column(String)  # 월주 2행
-    month_relationInfo2 = Column(String)  # 월주 육친 2행
-    year_info1 = Column(String)  # 연주 1행
-    year_relationInfo1 = Column(String)  # 연주 육친 1행
-    year_info2 = Column(String)  # 연주 2행
-    year_relationInfo2 = Column(String)  # 연주 육친 2행
-    # 여기에 사주 정보와 관련된 필드를 추가
-    # 웹 크롤링을 통해서 여기에 시주,일주,월주,년주 받기
-    user = relationship("User", back_populates="user_saju", uselist=False)
+    @classmethod
+    def create(cls, request: CreateMemberRequest, password: str) -> "Member":
+        return cls(
+            user_id=request.user_id,
+            email=request.email,
+            password=password,
+            name=request.name,
+            gender=request.gender,
+            birth_date=request.birth_date,
+            birth_time=request.birth_time
+        )
+
+    @classmethod
+    def update(cls, request: CreateMemberRequest) -> "Member":
+        return cls(
+            email=request.email,
+            password=request.password,
+            name=request.name,
+            gender=request.gender,
+            birth_date=request.birth_date,
+            birth_time=request.birth_time
+        )
 
 
-class Saju_Info(Base):
+class MemberSajuInfo(Base):
+    __tablename__ = "member_saju_info"
+
+    user_id = Column(String, ForeignKey('members.user_id'), primary_key=True)
+    saju_text = Column(String)
+    eight = Column(JSON)
+
+    member = relationship("Member", back_populates="saju_info")
+
+    @classmethod
+    def create_saju(
+            cls, request: CreateMemberSajuInfoRequest, user_id: str
+    ) -> "MemberSajuInfo":
+        return cls(
+            user_id=user_id,
+            eight=request.eight,
+            saju_text=None
+        )
+
+
+class SajuInfo(Base):
     __tablename__ = "saju_info"
-
-    letter = Column(String, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True, index=True)
+    letter = Column(String)
     mean = Column(String, nullable=True)
+    locate = Column(Integer, nullable=True)
     color = Column(String, nullable=True)
     count = Column(Integer, nullable=True)
-
