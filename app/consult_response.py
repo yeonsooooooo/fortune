@@ -24,13 +24,16 @@ OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
 
 openai = ChatOpenAI(model_name="gpt-3.5-turbo-0125",
-                    streaming=True, callbacks=[StreamingStdOutCallbackHandler()],
+                    streaming=True,
                     temperature = 0,
                     openai_api_key=OPENAI_API_KEY)
 
-
+openai_stream = ChatOpenAI(model_name="gpt-3.5-turbo-0125",
+                    streaming=True, callbacks=[StreamingStdOutCallbackHandler()],
+                    temperature = 0,
+                    openai_api_key=OPENAI_API_KEY)
 #load
-loader_test = TextLoader('app/test.txt', 'utf-8')
+loader_test = TextLoader('test.txt', 'utf-8')
 test_document = loader_test.load()
 
 tokenizer = tiktoken.get_encoding("cl100k_base")
@@ -56,7 +59,7 @@ template = """
 Analysis and advice: Please provide insights and advice on the personality of {personality}.
 Describe their tendencies, character, and traits. Additionally, analyze and offer advice on what they should be mindful of, what they need, and what they might be lacking. 
 Offer practical advice that could help this individual live a better life.
-Always answer in  Korean.
+Respond in Korean within 100 characters.
 
 Answer the question based on the personality:
 Question: {question}
