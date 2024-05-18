@@ -6,11 +6,15 @@ from langserve.pydantic_v1 import BaseModel, Field
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langserve import add_routes
 #from app.response_chain import response_chain
-from app.consult_chain import consult_chain, retriever
+from consult_response import consult_chain, retriever
 #from app.chat import chain as chat_chain
 
 from starlette.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
+
+#streaming
+from fastapi.responses import StreamingResponse
+
 
 #from consult_chain import consult_chain, retriever 
 
@@ -20,9 +24,8 @@ load_dotenv()
 
 app = FastAPI()
 
-
 #app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates")
+templates = Jinja2Templates(directory="../templates")
 
 app.add_middleware(
     CORSMiddleware,
@@ -51,7 +54,7 @@ async def chat_page(request: Request, query: str = None):  # 쿼리 파라미터
     # 쿼리 파라미터가 없는 경우, 일반 chat 페이지 반환
     else:
         return templates.TemplateResponse("chat.html", {"request": request})
-    
+
 @app.post("/mystery")
 async def get_answer(user_input):
     try:
@@ -62,6 +65,35 @@ async def get_answer(user_input):
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# #for streaming
+# def get_user_answer(user_input: str):
+#     chunks = []
+    
+#     try:
+#         docs = retriever.invoke(user_input)
+#         answer = consult_chain.invoke({"question": user_input, "personality": docs})
+#         return answer
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=str(e))
+
+#for streaming
+async def get_user_answer(user_input: str):
+    chunks = []
+
+    docs = retriever.invoke(user_input)
+    
+    async for chunk in consult_chain.astream({"question": user_input, "personality": docs}):
+        chunks.append(chunk)
+        #print("\n\nCHUNK:", chunk, "\n")
+        yield "data: " + chunk + "\n\n"
+
+
+@app.get('/stream')
+async def stream():
+    return StreamingResponse(get_user_answer("내 성격을 알려줘."), media_type='text/event-stream')
+
 
 if __name__ == "__main__":
     import uvicorn
