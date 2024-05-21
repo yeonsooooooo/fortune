@@ -49,7 +49,7 @@ from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 
 openai = ChatOpenAI(model_name="gpt-3.5-turbo-0125",
                     streaming=True, callbacks=[StreamingStdOutCallbackHandler()],
-                    temperature = 0,
+                    temperature = 1,
                     openai_api_key=OPENAI_API_KEY)
 
 def main():
@@ -241,7 +241,7 @@ def main():
                 raise Exception("Maximum retry attempts reached, failing...")
             
         else:
-            st.session_state['messages'] = [{"role": "assistant", "content": f"안녕하세요! 궁금하신 것이 있으면 언제든 물어봐주세요! 당신의 생년월일은 {dob}입니다."}]
+            st.session_state['messages'] = [{"role": "assistant", "content": f"당신만을 위한 사주 마스터 애기동자입니다. 궁금하신 것이 있으면 언제든 물어봐주세요! 당신의 생년월일은 {dob}입니다."}]
             print("\n\n이곳은 엘스 입니다 ")
             print("\n\ndob : ", dob)
 
@@ -391,11 +391,13 @@ def get_docs(vectorstore, user_input):
 
 def create_consult_chain(user_input, docs):
     template = """
-
+    You are a person who provides counseling based on human personality.
     Analysis and advice: Please provide insights and advice on the personality of {personality}.
-    Describe their tendencies, character, and traits. Additionally, analyze and offer advice on what they should be mindful of, what they need, and what they might be lacking. 
+    Describe their tendencies, character, and traits. 
+    Additionally, analyze and offer advice on what they should be mindful of, what they need, and what they might be lacking. 
     Offer practical advice that could help this individual live a better life.
-    Always answer in  Korean.
+    You should do your best to speak in the most friendly tone possible.
+    Always answer in  Korean. Response within 120 words.
 
     Answer the question based on the personality:
     Question: {question}
