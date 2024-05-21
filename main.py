@@ -357,9 +357,6 @@ def get_docs(vectorstore, user_input):
     #                 temperature = 0,
     #                 openai_api_key=OPENAI_API_KEY)
     
-    print("\n\n", user_input)
-    #retriever=vectorstore.as_retriever(search_type = 'mmr', vervose = True, search_kwargs={"k": 3}), 
-    #docs = retriever.invoke(user_input)
 
     docs = vectorstore.similarity_search(user_input)
 
