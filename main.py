@@ -4,6 +4,7 @@ from loguru import logger
 import requests
 import xml.etree.ElementTree as ET
 import urllib.parse
+import time
 
 from langchain.chains import ConversationalRetrievalChain
 from langchain_openai import ChatOpenAI
@@ -86,6 +87,171 @@ def main():
 
     #     st.session_state.processComplete = True
 
+    #selected_documents = db.similarity_search(query=user_input, k=5)
+    #retriever = db.as_retriever(search_kwargs={"k": 3})
+    
+    # files_text = get_text(uploaded_files)
+    # text_chunks = get_text_chunks(files_text)
+    # vetorestore = get_vectorstore(text_chunks)
+    
+    #st.session_state.conversation = get_conversation_chain(db, OPENAI_API_KEY) 
+    #st.session_state.conversation = get_consult_chain(db, OPENAI_API_KEY)
+
+    st.session_state.processComplete = True
+
+
+    # 세션 상태에 'input_count'와 'dob_entered' 키가 없으면 초기화
+    if 'input_count' not in st.session_state:
+        st.session_state['input_count'] = 0  # 입력 횟수를 추적하는 변수
+    if 'dob_entered' not in st.session_state:
+        st.session_state['dob_entered'] = False
+
+    # 사용자가 생년월일을 입력했는지 확인
+    if dob and not st.session_state['dob_entered']:
+        # 생년월일 입력 처리
+        print("\n\ndebug")
+        st.session_state['dob_entered'] = True
+        st.session_state['dob'] = dob
+        # 입력 횟수 증가
+        st.session_state['input_count'] = True
+
+
+    # _lun_date = ""
+    # _lun_month = ""
+    # _lun_year = ""
+
+    #eight = {}
+    # session_state를 사용하여 메세지 상태 관리
+    if 'messages' not in st.session_state or st.session_state['dob_entered']:
+        # 생년월일이 입력되지 않았다면, 입력 요청 메세지 추가
+        if not st.session_state['dob_entered']:  
+            st.session_state['messages'] = [{"role": "user", "content": "사이드바를 열고, 생년월일을 먼저 입력해주세요!"}]
+        
+        elif st.session_state['dob_entered'] and st.session_state['input_count']:
+            st.session_state['messages'] = [{"role": "assistant", "content": f"안녕하세요! 궁금하신 것이 있으면 언제든 물어봐주세요! 당신의 생년월일은 {dob}입니다."}]
+            
+            # 최대 재시도 횟수 설정
+            MAX_RETRIES = 3
+            attempts = 0
+
+            while attempts < MAX_RETRIES:
+                try:
+                    # 인증키를 URL 인코딩
+                    encoded_key = urllib.parse.quote(OPENAPI_KEY)
+
+                    print("\n\nencoded_key: ", encoded_key)
+                    # datetime 객체에서 년, 월, 일 추출
+                    solYear = dob.year
+                    solMonth = dob.month
+                    solDay = dob.day
+
+                    # API 요청 URL
+                    api_url = 'http://apis.data.go.kr/B090041/openapi/service/LrsrCldInfoService/getLunCalInfo'
+                    #api_url = 'http://apis.data.go.kr/B090041/openapi/service/LrsrCldInfoService'
+
+                    # API 요청에 필요한 파라미터 준비
+                    params = {
+                        'serviceKey': encoded_key, 
+                        'solYear': str(solYear),  
+                        'solMonth': str(solMonth).zfill(2), 
+                        'solDay': str(solDay).zfill(2)  # 일도 두 자릿수로 만듭니다.
+                    }
+
+                    # API 요청 및 응답 받기
+                    response = requests.get(api_url, params=params)
+                    print("\n\nRESPONSE: ", response)
+                    if response.status_code == 200:
+                    # 성공적으로 응답을 받았으면 루프를 빠져나옵니다.
+                        break
+                except requests.exceptions.RequestException as e:
+                     # 예외가 발생하면 에러 메시지를 출력하고 재시도합니다.
+                    print(f"Request failed: {e}, retrying... ({attempts + 1}/{MAX_RETRIES})")
+                    attempts += 1
+                    time.sleep(1)  # 잠시 대기 후 재시도
+            else:
+                # 최대 재시도 횟수를 초과한 경우
+                raise Exception("Maximum retry attempts reached, failing...")
+            
+
+            if response.status_code == 200:
+                # 응답 본문을 UTF-8로 디코딩
+                xml_data = response.content.decode('utf-8')
+                
+                print("\n\nxml_Data", xml_data)
+                # XML 선언 제거
+                start_index = xml_data.find('<?xml')
+                if start_index != -1:
+                    end_index = xml_data.find('?>', start_index)
+                    if end_index != -1:
+                        xml_data = xml_data[end_index + 2:]
+                
+                # XML 응답 파싱
+                root = ET.fromstring(xml_data)
+                
+                print("\n\nROOT: ", root)
+                # 필요한 데이터 추출
+                lun_date = root.find('.//lunIljin').text
+                lun_month = root.find('.//lunWolgeon').text
+                lun_year = root.find('.//lunSecha').text
+                
+                # print("\n\nlun_date:", lun_date)
+                # print("\n\nlun_month: ", lun_month)
+                # print("\n\nlun_year: ", lun_year)
+
+                _lun_date = lun_date
+                _lun_month = lun_month 
+                _lun_year = lun_year
+                #print(xml_data)
+                    # 데이터 재구성
+                eight = {
+                    "1": "0",
+                    "2": "0",
+                    "3": _lun_date[0],
+                    "4": _lun_date[1],
+                    "5": _lun_month[0],
+                    "6": _lun_month[1],
+                    "7": _lun_year[0],
+                    "8": _lun_year[1],
+                }
+                
+                #년월일 로 텍스트 조회하기.
+                base_url = "https://port-0-baby-monk-rm6l2llwb02l9k.sel5.cloudtype.app"
+                endpoint = "/saju/saju_info"
+
+                saju_url = base_url + endpoint
+
+                data = {
+                    "eight": eight
+                }
+
+                saju_response = requests.post(saju_url, json=data)
+
+                print("Status Code:", saju_response.status_code)
+                print("\n\nResponse Body:", saju_response.json())
+
+                temp_text = saju_response.json()
+
+                with open('test.txt', 'w', encoding='utf-8') as file:
+                    file.write(temp_text)
+
+                st.session_state['input_count'] = False
+            else:
+                raise Exception('Failed to load lunar data')
+
+        else:
+            st.session_state['messages'] = [{"role": "assistant", "content": f"안녕하세요! 궁금하신 것이 있으면 언제든 물어봐주세요! 당신의 생년월일은 {dob}입니다."}]
+            print("\n\ndob : ", dob)
+
+           
+    # print("\n\nlun_date:", _lun_date)
+    # print("\n\nlun_month: ", _lun_month)
+    # print("\n\nlun_year: ", _lun_year)
+    # print("\n\nEIGHT:", eight)
+
+
+    
+
+    #불러온 텍스트 데이터 벡터저장소에 임베딩
     loader_test = TextLoader('test.txt', 'utf-8')
 
     test_document = loader_test.load()
@@ -103,95 +269,6 @@ def main():
     #add to vectorstore
     embedding_function = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY, model="text-embedding-3-small")
     db = FAISS.from_documents(documents, embedding_function)
-    #selected_documents = db.similarity_search(query=user_input, k=5)
-    #retriever = db.as_retriever(search_kwargs={"k": 3})
-    
-    # files_text = get_text(uploaded_files)
-    # text_chunks = get_text_chunks(files_text)
-    # vetorestore = get_vectorstore(text_chunks)
-    
-    #st.session_state.conversation = get_conversation_chain(db, OPENAI_API_KEY) 
-    #st.session_state.conversation = get_consult_chain(db, OPENAI_API_KEY)
-
-    st.session_state.processComplete = True
-
-    #생일 입력을 위함.
-    # 세션 상태에 'dob_entered' 키가 없으면 초기화
-    if 'dob_entered' not in st.session_state:
-        st.session_state['dob_entered'] = False
-
-    # 사용자가 생년월일을 입력했는지 확인
-    if dob is not None and not st.session_state['dob_entered']:
-        # 생년월일 입력 처리
-        print("\n\ndebug")
-        st.session_state['dob_entered'] = True
-        st.session_state['dob'] = dob
-
-
-    # session_state를 사용하여 메세지 상태 관리
-    if 'messages' not in st.session_state or st.session_state['dob_entered']:
-        # 생년월일이 입력되지 않았다면, 입력 요청 메세지 추가
-        if not st.session_state['dob_entered']:  
-            st.session_state['messages'] = [{"role": "user", "content": "사이드바를 열고, 생년월일을 먼저 입력해주세요!"}]
-        
-        else:
-            st.session_state['messages'] = [{"role": "assistant", "content": f"안녕하세요! 궁금하신 것이 있으면 언제든 물어봐주세요! 당신의 생년월일은 {dob}입니다."}]
-            print("\n\ndob : ", dob)
-
-            # 인증키를 URL 인코딩
-            encoded_key = urllib.parse.quote(OPENAPI_KEY)
-
-            # datetime 객체에서 년, 월, 일 추출
-            solYear = dob.year
-            solMonth = dob.month
-            solDay = dob.day
-
-            # API 요청 URL
-            api_url = 'http://apis.data.go.kr/B090041/openapi/service/LrsrCldInfoService/getLunCalInfo'
-
-            # API 요청에 필요한 파라미터 준비
-            params = {
-                'serviceKey': encoded_key, 
-                'solYear': str(solYear),  
-                'solMonth': str(solMonth).zfill(2), 
-                'solDay': str(solDay).zfill(2)  # 일도 두 자릿수로 만듭니다.
-            }
-
-            # API 요청 및 응답 받기
-            response = requests.get(api_url, params=params)
-            #response = requests.get(f'{api_url}?solYear={solYear}&solMonth={solMonth}&solDay={solDay}&ServiceKey={OPENAPI_KEY}')
-            print("\n\nRESPONSE: ", response)
-
-            if response.status_code == 200:
-                # 응답 본문을 UTF-8로 디코딩
-                xml_data = response.content.decode('utf-8')
-                
-                # XML 선언 제거
-                start_index = xml_data.find('<?xml')
-                if start_index != -1:
-                    end_index = xml_data.find('?>', start_index)
-                    if end_index != -1:
-                        xml_data = xml_data[end_index + 2:]
-                
-                # XML 응답 파싱
-                root = ET.fromstring(xml_data)
-                
-                # 필요한 데이터 추출
-                lun_iljin = root.find('.//lunIljin').text
-                lun_wolgeon = root.find('.//lunWolgeon').text
-                
-                print(f'Result Code: {lun_iljin}')
-                print(f'Result Message: {lun_wolgeon}')
-                print(xml_data)
-                
-                # 필요한 경우 상태 업데이트
-                _lun_iljin = lun_iljin
-                _lun_wolgeon = lun_wolgeon
-            else:
-                raise Exception('Failed to load lunar data')
-
-
-
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
