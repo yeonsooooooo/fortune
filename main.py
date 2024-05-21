@@ -131,7 +131,7 @@ def main():
             st.session_state['messages'] = [{"role": "assistant", "content": f"안녕하세요! 궁금하신 것이 있으면 언제든 물어봐주세요! 당신의 생년월일은 {dob}입니다."}]
             
             # 최대 재시도 횟수 설정
-            MAX_RETRIES = 3
+            MAX_RETRIES = 5
             attempts = 0
 
             while attempts < MAX_RETRIES:
@@ -161,85 +161,88 @@ def main():
                     response = requests.get(api_url, params=params)
                     print("\n\nRESPONSE: ", response)
                     if response.status_code == 200:
-                    # 성공적으로 응답을 받았으면 루프를 빠져나옵니다.
-                        break
+                        # 응답 본문을 UTF-8로 디코딩
+                        xml_data = response.content.decode('utf-8')
+                        
+                        print("\n\nxml_Data", xml_data)
+                        # XML 선언 제거
+                        start_index = xml_data.find('<?xml')
+                        if start_index != -1:
+                            end_index = xml_data.find('?>', start_index)
+                            if end_index != -1:
+                                xml_data = xml_data[end_index + 2:]
+                        
+                        # XML 응답 파싱
+                        root = ET.fromstring(xml_data)
+                        
+                        print("\n\nROOT: ", root)
+                        # 필요한 데이터 추출
+                        lun_date = root.find('.//lunIljin').text
+                        if lun_date is None:
+                            raise AttributeError("lunIljin element not found or has no text.")
+                        lun_month = root.find('.//lunWolgeon').text
+                        lun_year = root.find('.//lunSecha').text
+                        
+                        # print("\n\nlun_date:", lun_date)
+                        # print("\n\nlun_month: ", lun_month)
+                        # print("\n\nlun_year: ", lun_year)
+
+                        _lun_date = lun_date
+                        _lun_month = lun_month 
+                        _lun_year = lun_year
+                        #print(xml_data)
+                            # 데이터 재구성
+                        eight = {
+                            "1": "0",
+                            "2": "0",
+                            "3": _lun_date[0],
+                            "4": _lun_date[1],
+                            "5": _lun_month[0],
+                            "6": _lun_month[1],
+                            "7": _lun_year[0],
+                            "8": _lun_year[1],
+                        }
+                        
+                        #년월일 로 텍스트 조회하기.
+                        base_url = "https://port-0-baby-monk-rm6l2llwb02l9k.sel5.cloudtype.app"
+                        endpoint = "/saju/saju_info"
+
+                        saju_url = base_url + endpoint
+
+                        data = {
+                            "eight": eight
+                        }
+
+                        saju_response = requests.post(saju_url, json=data)
+
+                        print("Status Code:", saju_response.status_code)
+                        print("\n\nResponse Body:", saju_response.json())
+
+                        temp_text = saju_response.json()
+
+                        with open('test.txt', 'w', encoding='utf-8') as file:
+                            file.write(temp_text)
+
+                        st.session_state['input_count'] = False
+
+                        if saju_response.status_code == 200 or 201:
+                            break
                 except requests.exceptions.RequestException as e:
-                     # 예외가 발생하면 에러 메시지를 출력하고 재시도합니다.
+                    # 예외가 발생하면 에러 메시지를 출력하고 재시도합니다.
                     print(f"Request failed: {e}, retrying... ({attempts + 1}/{MAX_RETRIES})")
                     attempts += 1
                     time.sleep(1)  # 잠시 대기 후 재시도
+                except AttributeError as e:
+                    print(f"Request failed: {e}, retrying... ({attempts + 1}/{MAX_RETRIES})")
+                    attempts += 1
+                    time.sleep(3)  # 잠시 대기 후 재시도
             else:
                 # 최대 재시도 횟수를 초과한 경우
                 raise Exception("Maximum retry attempts reached, failing...")
             
-
-            if response.status_code == 200:
-                # 응답 본문을 UTF-8로 디코딩
-                xml_data = response.content.decode('utf-8')
-                
-                print("\n\nxml_Data", xml_data)
-                # XML 선언 제거
-                start_index = xml_data.find('<?xml')
-                if start_index != -1:
-                    end_index = xml_data.find('?>', start_index)
-                    if end_index != -1:
-                        xml_data = xml_data[end_index + 2:]
-                
-                # XML 응답 파싱
-                root = ET.fromstring(xml_data)
-                
-                print("\n\nROOT: ", root)
-                # 필요한 데이터 추출
-                lun_date = root.find('.//lunIljin').text
-                lun_month = root.find('.//lunWolgeon').text
-                lun_year = root.find('.//lunSecha').text
-                
-                # print("\n\nlun_date:", lun_date)
-                # print("\n\nlun_month: ", lun_month)
-                # print("\n\nlun_year: ", lun_year)
-
-                _lun_date = lun_date
-                _lun_month = lun_month 
-                _lun_year = lun_year
-                #print(xml_data)
-                    # 데이터 재구성
-                eight = {
-                    "1": "0",
-                    "2": "0",
-                    "3": _lun_date[0],
-                    "4": _lun_date[1],
-                    "5": _lun_month[0],
-                    "6": _lun_month[1],
-                    "7": _lun_year[0],
-                    "8": _lun_year[1],
-                }
-                
-                #년월일 로 텍스트 조회하기.
-                base_url = "https://port-0-baby-monk-rm6l2llwb02l9k.sel5.cloudtype.app"
-                endpoint = "/saju/saju_info"
-
-                saju_url = base_url + endpoint
-
-                data = {
-                    "eight": eight
-                }
-
-                saju_response = requests.post(saju_url, json=data)
-
-                print("Status Code:", saju_response.status_code)
-                print("\n\nResponse Body:", saju_response.json())
-
-                temp_text = saju_response.json()
-
-                with open('test.txt', 'w', encoding='utf-8') as file:
-                    file.write(temp_text)
-
-                st.session_state['input_count'] = False
-            else:
-                raise Exception('Failed to load lunar data')
-
         else:
             st.session_state['messages'] = [{"role": "assistant", "content": f"안녕하세요! 궁금하신 것이 있으면 언제든 물어봐주세요! 당신의 생년월일은 {dob}입니다."}]
+            print("\n\n이곳은 엘스 입니다 ")
             print("\n\ndob : ", dob)
 
            
