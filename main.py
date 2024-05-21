@@ -1,6 +1,9 @@
 import streamlit as st
 import tiktoken
 from loguru import logger
+import requests
+import xml.etree.ElementTree as ET
+import urllib.parse
 
 from langchain.chains import ConversationalRetrievalChain
 from langchain_openai import ChatOpenAI
@@ -21,12 +24,13 @@ from langchain.memory import StreamlitChatMessageHistory
 #new added
 from dotenv import load_dotenv
 import os
-from datetime import date
+from datetime import date, datetime
 
 
 load_dotenv()
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
+OPENAPI_KEY = os.getenv('OPENAPI_KEY')
 
 
 from langchain_community.document_loaders import TextLoader
@@ -123,17 +127,76 @@ def main():
         st.session_state['dob_entered'] = True
         st.session_state['dob'] = dob
 
+
     # session_state를 사용하여 메세지 상태 관리
     if 'messages' not in st.session_state or st.session_state['dob_entered']:
         # 생년월일이 입력되지 않았다면, 입력 요청 메세지 추가
         if not st.session_state['dob_entered']:  
             st.session_state['messages'] = [{"role": "user", "content": "사이드바를 열고, 생년월일을 먼저 입력해주세요!"}]
+        
         else:
             st.session_state['messages'] = [{"role": "assistant", "content": f"안녕하세요! 궁금하신 것이 있으면 언제든 물어봐주세요! 당신의 생년월일은 {dob}입니다."}]
+            print("\n\ndob : ", dob)
+
+            # 인증키를 URL 인코딩
+            encoded_key = urllib.parse.quote(OPENAPI_KEY)
+
+            # datetime 객체에서 년, 월, 일 추출
+            solYear = dob.year
+            solMonth = dob.month
+            solDay = dob.day
+
+            # API 요청 URL
+            api_url = 'http://apis.data.go.kr/B090041/openapi/service/LrsrCldInfoService/getLunCalInfo'
+
+            # API 요청에 필요한 파라미터 준비
+            params = {
+                'serviceKey': encoded_key, 
+                'solYear': str(solYear),  
+                'solMonth': str(solMonth).zfill(2), 
+                'solDay': str(solDay).zfill(2)  # 일도 두 자릿수로 만듭니다.
+            }
+
+            # API 요청 및 응답 받기
+            response = requests.get(api_url, params=params)
+            #response = requests.get(f'{api_url}?solYear={solYear}&solMonth={solMonth}&solDay={solDay}&ServiceKey={OPENAPI_KEY}')
+            print("\n\nRESPONSE: ", response)
+
+            if response.status_code == 200:
+                # 응답 본문을 UTF-8로 디코딩
+                xml_data = response.content.decode('utf-8')
+                
+                # XML 선언 제거
+                start_index = xml_data.find('<?xml')
+                if start_index != -1:
+                    end_index = xml_data.find('?>', start_index)
+                    if end_index != -1:
+                        xml_data = xml_data[end_index + 2:]
+                
+                # XML 응답 파싱
+                root = ET.fromstring(xml_data)
+                
+                # 필요한 데이터 추출
+                lun_iljin = root.find('.//lunIljin').text
+                lun_wolgeon = root.find('.//lunWolgeon').text
+                
+                print(f'Result Code: {lun_iljin}')
+                print(f'Result Message: {lun_wolgeon}')
+                print(xml_data)
+                
+                # 필요한 경우 상태 업데이트
+                _lun_iljin = lun_iljin
+                _lun_wolgeon = lun_wolgeon
+            else:
+                raise Exception('Failed to load lunar data')
+
+
 
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
+
+    
 
     history = StreamlitChatMessageHistory(key="chat_messages")
 

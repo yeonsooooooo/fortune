@@ -91,8 +91,8 @@ async def get_user_answer(user_input: str):
 
 
 @app.get('/stream')
-async def stream():
-    return StreamingResponse(get_user_answer("내 성격을 알려줘."), media_type='text/event-stream')
+async def stream(query):
+    return StreamingResponse(get_user_answer(query), media_type='text/event-stream')
 
 
 if __name__ == "__main__":
