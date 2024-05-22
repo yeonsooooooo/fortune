@@ -14,11 +14,13 @@ from fastapi.staticfiles import StaticFiles
 
 #streaming
 from fastapi.responses import StreamingResponse
-
+import httpx
+import asyncio
 
 #from consult_chain import consult_chain, retriever 
 
 from dotenv import load_dotenv
+
 
 load_dotenv()
 
@@ -55,26 +57,12 @@ async def chat_page(request: Request, query: str = None):  # 쿼리 파라미터
     else:
         return templates.TemplateResponse("chat.html", {"request": request})
 
-@app.post("/mystery")
-async def get_answer(user_input):
-    try:
-        docs = retriever.invoke(user_input)
-        answer = consult_chain.invoke({"question": user_input, "personality" : docs})
-
-        return JSONResponse(content={"answer": answer})
-    
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# #for streaming
-# def get_user_answer(user_input: str):
-#     chunks = []
-    
+# @app.post("/mystery")
+# async def get_answer(user_input):
 #     try:
 #         docs = retriever.invoke(user_input)
-#         answer = consult_chain.invoke({"question": user_input, "personality": docs})
-#         return answer
+#         answer = consult_chain.invoke({"question": user_input, "personality" : docs})
+#         return JSONResponse(content={"answer": answer})
 #     except Exception as e:
 #         raise HTTPException(status_code=500, detail=str(e))
 
@@ -87,12 +75,44 @@ async def get_user_answer(user_input: str):
     async for chunk in consult_chain.astream({"question": user_input, "personality": docs}):
         chunks.append(chunk)
         #print("\n\nCHUNK:", chunk, "\n")
-        yield "data: " + chunk + "\n\n"
-
+        yield f"data: {chunk}\n\n"
+    
+    print("\n\nCHUNKS : ", chunks)
+    
 
 @app.get('/stream')
 async def stream(query):
+    #답변 온걸 한번 끊고, 일단 실시간 답변을 하고 나머지는 이후에 일어나도록 해야한다.
     return StreamingResponse(get_user_answer(query), media_type='text/event-stream')
+
+@app.post("/mystery")
+async def get_answer(request: Request):
+    try:
+        # 요청 본문을 비동기적으로 처리
+        user_input = await request.json()
+        
+        print("user_input : ", user_input)
+        # httpx 라이브러리를 사용하여 비동기적으로 /stream 엔드포인트에 요청을 보냄
+        async with httpx.AsyncClient() as client:
+            #print(response.status_code)
+            print("\n\n디버깅")
+            async with client.stream("GET", f"http://localhost:8000/stream?query={user_input['query']}") as response:
+                first_real_time_answer = None
+                async for chunk in response.aiter_text():
+                    if chunk:
+                        print(chunk, end='', flush=True)
+                        # 실시간으로 첫 번째 답변을 받은 후 반복문을 종료
+                        first_real_time_answer = chunk.strip()
+                        break
+
+        return JSONResponse(content={"answer": first_real_time_answer})
+
+    except Exception as e:
+        print(f"Exception occurred: {str(e)}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+
 
 
 if __name__ == "__main__":
