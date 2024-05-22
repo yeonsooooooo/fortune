@@ -138,8 +138,8 @@ def main():
                 try:
                     # 인증키를 URL 인코딩
                     encoded_key = urllib.parse.quote(OPENAPI_KEY)
-
-                    print("\n\nencoded_key: ", encoded_key)
+                    print("Encoded Key: ", encoded_key)
+                    
                     # datetime 객체에서 년, 월, 일 추출
                     solYear = dob.year
                     solMonth = dob.month
@@ -147,41 +147,43 @@ def main():
 
                     # API 요청 URL
                     api_url = 'http://apis.data.go.kr/B090041/openapi/service/LrsrCldInfoService/getLunCalInfo'
-                    #api_url = 'http://apis.data.go.kr/B090041/openapi/service/LrsrCldInfoService'
 
                     # API 요청에 필요한 파라미터 준비
                     params = {
-                        'serviceKey': encoded_key, 
-                        'solYear': str(solYear),  
-                        'solMonth': str(solMonth).zfill(2), 
-                        'solDay': str(solDay).zfill(2)  # 일도 두 자릿수로 만듭니다.
+                        'serviceKey': encoded_key,
+                        'solYear': str(solYear),
+                        'solMonth': str(solMonth).zfill(2),
+                        'solDay': str(solDay).zfill(2)
                     }
 
                     # API 요청 및 응답 받기
                     response = requests.get(api_url, params=params)
-                    print("\n\nRESPONSE: ", response)
+                    print("RESPONSE: ", response)
+
                     if response.status_code == 200:
                         # 응답 본문을 UTF-8로 디코딩
                         xml_data = response.content.decode('utf-8')
-                        
-                        print("\n\nxml_Data", xml_data)
+                        print("xml_Data: ", xml_data)
+
                         # XML 선언 제거
                         start_index = xml_data.find('<?xml')
                         if start_index != -1:
                             end_index = xml_data.find('?>', start_index)
                             if end_index != -1:
                                 xml_data = xml_data[end_index + 2:]
-                        
+
                         # XML 응답 파싱
                         root = ET.fromstring(xml_data)
-                        
-                        print("\n\nROOT: ", root)
+                        print("ROOT: ", root)
+
                         # 필요한 데이터 추출
                         lun_date = root.find('.//lunIljin').text
                         if lun_date is None:
                             raise AttributeError("lunIljin element not found or has no text.")
                         lun_month = root.find('.//lunWolgeon').text
                         lun_year = root.find('.//lunSecha').text
+
+
                         
                         # print("\n\nlun_date:", lun_date)
                         # print("\n\nlun_month: ", lun_month)
