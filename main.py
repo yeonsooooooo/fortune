@@ -122,6 +122,7 @@ def main():
                             'solDay': str(solDay).zfill(2)
                         }
 
+                        print("INPUT PARAMS: ", params)
                         # API 요청 및 응답 받기
                         response = requests.get(api_url, params=params)
                         print("RESPONSE: ", response)
@@ -148,6 +149,16 @@ def main():
                                 raise AttributeError("lunIljin element not found or has no text.")
                             lun_month = root.find('.//lunWolgeon').text
                             lun_year = root.find('.//lunSecha').text
+
+                            # 기본값 설정
+                            if lun_month is None:
+                                print("\n\n월의 정보가 비어 있음.\n\n")
+                                lun_month = "00"  
+
+                            if lun_year is None:
+                                print("\n\n연의 정보가 비어 있음.\n\n")
+                                lun_year = "00"
+
 
                             _lun_date = lun_date
                             _lun_month = lun_month 
